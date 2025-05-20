@@ -94,6 +94,9 @@ from utils.torch_utils import (
     smart_resume,
     torch_distributed_zero_first,
 )
+from models.common import BiFPN_Add2
+from models.common import BiFPN_Add3
+
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv("RANK", -1))
@@ -247,6 +250,20 @@ def train(hyp, opt, device, callbacks):
     accumulate = max(round(nbs / batch_size), 1)  # accumulate loss before optimizing
     hyp["weight_decay"] *= batch_size * accumulate / nbs  # scale weight_decay
     optimizer = smart_optimizer(model, opt.optimizer, hyp["lr0"], hyp["momentum"], hyp["weight_decay"])
+
+    g0, g1, g2 = [], [], []  # optimizer parameter groups
+    for v in model.modules():
+        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
+            g2.append(v.bias)
+        if isinstance(v, nn.BatchNorm2d):  # weight (no decay)
+            g0.append(v.weight)
+        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+            g1.append(v.weight)
+        # BiFPN_Concat
+        elif isinstance(v, BiFPN_Add2) and hasattr(v, 'w') and isinstance(v.w, nn.Parameter):
+            g1.append(v.w)
+        elif isinstance(v, BiFPN_Add3) and hasattr(v, 'w') and isinstance(v.w, nn.Parameter):
+            g1.append(v.w)
 
     # Scheduler
     if opt.cos_lr:
