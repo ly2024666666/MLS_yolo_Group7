@@ -6,7 +6,7 @@ YOLO-specific modules.
 Usage:
     $ python models/yolo.py --cfg yolov5s.yaml
 """
-
+from .modules import *
 import argparse
 import contextlib
 import math
@@ -446,6 +446,9 @@ def parse_model(d, ch):
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
+        elif m in{ CBAM, CoordAtt}:
+            c2 = ch[f]
+            args = [c2, *args]
         else:
             c2 = ch[f]
 
