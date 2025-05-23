@@ -7,4 +7,5 @@ test: # Optional path to test images
 
 # Classes (example using 80 COCO classes)
 names:
-  0: smoke
+    0: smoke
+
