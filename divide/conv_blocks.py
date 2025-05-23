@@ -1,7 +1,9 @@
+import math
+
 import torch
 import torch.nn as nn
-import math
 from util import autopad
+
 
 class Conv(nn.Module):
     """Applies a convolution, batch normalization, and activation function to an input tensor in a neural network."""
@@ -33,6 +35,7 @@ class DWConv(Conv):
         """
         super().__init__(c1, c2, k, s, g=math.gcd(c1, c2), d=d, act=act)
 
+
 class DWConvTranspose2d(nn.ConvTranspose2d):
     """A depth-wise transpose convolutional layer for upsampling in neural networks, particularly in YOLOv5 models."""
 
@@ -61,7 +64,7 @@ class Bottleneck(nn.Module):
         tensor.
         """
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
-    
+
 
 class CrossConv(nn.Module):
     """Implements a cross convolution layer with downsampling, expansion, and optional shortcut."""
@@ -82,7 +85,8 @@ class CrossConv(nn.Module):
     def forward(self, x):
         """Performs feature sampling, expanding, and applies shortcut if channels match; expects `x` input tensor."""
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
-    
+
+
 class GhostConv(nn.Module):
     """Implements Ghost Convolution for efficient feature extraction, see https://github.com/huawei-noah/ghostnet."""
 

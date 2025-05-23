@@ -6,7 +6,7 @@ YOLO-specific modules.
 Usage:
     $ python models/yolo.py --cfg yolov5s.yaml
 """
-from .modules import *
+
 import argparse
 import contextlib
 import math
@@ -18,6 +18,8 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
+
+from .modules import *
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLOv5 root directory
@@ -49,7 +51,6 @@ from models.common import (
     GhostBottleneck,
     GhostConv,
     Proto,
-    CustomAttentionModule,
 )
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
@@ -446,7 +447,7 @@ def parse_model(d, ch):
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
-        elif m in{ CBAM, CoordAtt}:
+        elif m in {CBAM, CoordAtt}:
             c2 = ch[f]
             args = [c2, *args]
         else:

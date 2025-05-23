@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class CustomAttentionModule(nn.Module):
     def __init__(self, channels):
         super().__init__()
@@ -17,5 +18,3 @@ class CustomAttentionModule(nn.Module):
         attn_probs = self.softmax(attn_scores)
         output = torch.matmul(attn_probs, v)
         return output
-
-
