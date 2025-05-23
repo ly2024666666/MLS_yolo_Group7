@@ -2,7 +2,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-
 import requests
 import torch
 import torch.nn as nn
@@ -20,6 +19,9 @@ except (ImportError, AssertionError):
     os.system("pip install -U ultralytics")
     import ultralytics
 
+from detections import Detections
+from util import DetectMultiBackend
+
 from utils.dataloaders import exif_transpose, letterbox
 from utils.general import (
     LOGGER,
@@ -29,8 +31,7 @@ from utils.general import (
     scale_boxes,
 )
 from utils.torch_utils import copy_attr, smart_inference_mode
-from detections import Detections
-from util import DetectMultiBackend
+
 
 class AutoShape(nn.Module):
     """AutoShape class for robust YOLOv5 inference with preprocessing, NMS, and support for various input formats."""
@@ -142,4 +143,3 @@ class AutoShape(nn.Module):
                     scale_boxes(shape1, y[i][:, :4], shape0[i])
 
             return Detections(ims, y, files, dt, self.names, x.shape)
-
