@@ -5,7 +5,7 @@
 import torch
 import torch.nn as nn
 
-from utils.metrics import bbox_iou
+from utils.metrics import bbox_iou, box_iou
 from utils.torch_utils import de_parallel
 
 
@@ -89,6 +89,96 @@ class QFocalLoss(nn.Module):
             return loss.sum()
         else:  # 'none'
             return loss
+
+
+class ATSSAssigner:
+    """
+    ATSS正负样本分配器
+    """
+    def __init__(self, top_k=9):
+        self.top_k = top_k
+
+    def assign(self, anchors, gt_boxes):
+        # anchors: [num_anchors, 2] (w, h)
+        # gt_boxes: [num_gt, 4] (cx, cy, w, h) 归一化到特征图尺度
+        num_anchors = anchors.size(0)
+        num_gt = gt_boxes.size(0)
+        if num_gt == 0:
+            return torch.zeros(num_anchors, dtype=torch.bool, device=anchors.device)
+        # 计算IoU
+        gt_boxes_xyxy = torch.cat([
+            gt_boxes[:, :2] - gt_boxes[:, 2:] / 2,
+            gt_boxes[:, :2] + gt_boxes[:, 2:] / 2
+        ], dim=1)  # [num_gt, 4]
+        anchors_xyxy = torch.cat([
+            anchors[:, :2] - anchors[:, 2:] / 2,
+            anchors[:, :2] + anchors[:, 2:] / 2
+        ], dim=1)  # [num_anchors, 4]
+        ious = box_iou(anchors_xyxy, gt_boxes_xyxy)  # [num_anchors, num_gt]
+        # 对每个gt，选top_k个IoU最大的anchor为正样本
+        is_pos = torch.zeros_like(ious, dtype=torch.bool)
+        for gt_idx in range(num_gt):
+            topk = min(self.top_k, num_anchors)
+            _, topk_idxs = ious[:, gt_idx].topk(topk, largest=True)
+            is_pos[topk_idxs, gt_idx] = True
+        # 合并所有gt的正样本
+        pos_mask = is_pos.any(dim=1)
+        return pos_mask
+
+class SimOTAAssigner:
+    """
+    SimOTA正负样本分配器（YOLOX核心）
+    """
+    def __init__(self, center_radius=2.5):
+        self.center_radius = center_radius
+
+    def assign(self, anchors, gt_boxes, gt_classes, pred_cls, pred_box):
+        # anchors: [num_anchors, 2] (cx, cy)
+        # gt_boxes: [num_gt, 4] (cx, cy, w, h)
+        # pred_cls: [num_anchors, num_classes] (logits)
+        # pred_box: [num_anchors, 4] (cx, cy, w, h)
+        num_anchors = anchors.size(0)
+        num_gt = gt_boxes.size(0)
+        device = anchors.device
+        if num_gt == 0:
+            return torch.zeros(num_anchors, dtype=torch.bool, device=device), torch.full((num_anchors,), -1, device=device)
+        # 计算每个anchor与gt的IoU
+        gt_boxes_xyxy = torch.cat([
+            gt_boxes[:, :2] - gt_boxes[:, 2:] / 2,
+            gt_boxes[:, :2] + gt_boxes[:, 2:] / 2
+        ], dim=1)  # [num_gt, 4]
+        pred_boxes_xyxy = torch.cat([
+            pred_box[:, :2] - pred_box[:, 2:] / 2,
+            pred_box[:, :2] + pred_box[:, 2:] / 2
+        ], dim=1)  # [num_anchors, 4]
+        ious = box_iou(pred_boxes_xyxy, gt_boxes_xyxy)  # [num_anchors, num_gt]
+        # 分类分支分数
+        cls_prob = pred_cls.sigmoid()  # [num_anchors, num_classes]
+        gt_cls_onehot = torch.zeros((num_gt, cls_prob.size(1)), device=device)
+        gt_cls_onehot[torch.arange(num_gt), gt_classes] = 1.0
+        cls_cost = -torch.matmul(cls_prob, gt_cls_onehot.t())  # [num_anchors, num_gt]
+        # IoU cost
+        iou_cost = -ious
+        # 总cost
+        cost = cls_cost + 3.0 * iou_cost
+        # 动态k
+        matching_matrix = torch.zeros_like(cost, dtype=torch.uint8)
+        topk_ious, _ = ious.topk(min(10, ious.size(0)), dim=0)
+        dynamic_ks = torch.clamp(topk_ious.sum(0).int(), min=1)
+        for gt_idx in range(num_gt):
+            _, pos_idx = torch.topk(cost[:, gt_idx], k=dynamic_ks[gt_idx].item(), largest=False)
+            matching_matrix[pos_idx, gt_idx] = 1
+        # 每个anchor只分配给一个gt
+        anchor_matching_gt = matching_matrix.sum(1)
+        if (anchor_matching_gt > 1).sum() > 0:
+            multiple_match_idx = torch.where(anchor_matching_gt > 1)[0]
+            for idx in multiple_match_idx:
+                gt_idx = cost[idx].argmin()
+                matching_matrix[idx] = 0
+                matching_matrix[idx, gt_idx] = 1
+        assigned_gt = matching_matrix.argmax(1)
+        pos_mask = matching_matrix.sum(1).bool()
+        return pos_mask, assigned_gt
 
 
 class ComputeLoss:
@@ -177,66 +267,48 @@ class ComputeLoss:
         return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()
 
     def build_targets(self, p, targets):
-        """Prepares model targets from input targets (image,class,x,y,w,h) for loss computation, returning class, box,
-        indices, and anchors.
-        """
+        # SimOTA分配正负样本
         na, nt = self.na, targets.shape[0]  # number of anchors, targets
         tcls, tbox, indices, anch = [], [], [], []
         gain = torch.ones(7, device=self.device)  # normalized to gridspace gain
         ai = torch.arange(na, device=self.device).float().view(na, 1).repeat(1, nt)  # same as .repeat_interleave(nt)
         targets = torch.cat((targets.repeat(na, 1, 1), ai[..., None]), 2)  # append anchor indices
-
-        g = 0.5  # bias
-        off = (
-            torch.tensor(
-                [
-                    [0, 0],
-                    [1, 0],
-                    [0, 1],
-                    [-1, 0],
-                    [0, -1],  # j,k,l,m
-                    # [1, 1], [1, -1], [-1, 1], [-1, -1],  # jk,jm,lk,lm
-                ],
-                device=self.device,
-            ).float()
-            * g
-        )  # offsets
-
         for i in range(self.nl):
             anchors, shape = self.anchors[i], p[i].shape
             gain[2:6] = torch.tensor(shape)[[3, 2, 3, 2]]  # xyxy gain
-
-            # Match targets to anchors
             t = targets * gain  # shape(3,n,7)
             if nt:
-                # Matches
-                r = t[..., 4:6] / anchors[:, None]  # wh ratio
-                j = torch.max(r, 1 / r).max(2)[0] < self.hyp["anchor_t"]  # compare
-                # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
-                t = t[j]  # filter
-
-                # Offsets
-                gxy = t[:, 2:4]  # grid xy
-                gxi = gain[[2, 3]] - gxy  # inverse
-                j, k = ((gxy % 1 < g) & (gxy > 1)).T
-                l, m = ((gxi % 1 < g) & (gxi > 1)).T
-                j = torch.stack((torch.ones_like(j), j, k, l, m))
-                t = t.repeat((5, 1, 1))[j]
-                offsets = (torch.zeros_like(gxy)[None] + off[:, None])[j]
+                # 取anchor中心点
+                grid_y, grid_x = torch.meshgrid(torch.arange(shape[2], device=self.device), torch.arange(shape[3], device=self.device), indexing='ij')
+                anchor_centers = torch.stack((grid_x, grid_y), dim=-1).reshape(-1, 2).float()  # [num_anchors, 2]
+                anchor_centers = (anchor_centers + 0.5) / torch.tensor([shape[3], shape[2]], device=self.device)
+                # 取gt
+                gt_boxes = t[:, 2:6] / torch.tensor([shape[3], shape[2], shape[3], shape[2]], device=self.device)
+                gt_classes = t[:, 1].long()
+                # 预测框
+                pred_box = torch.zeros_like(anchor_centers).repeat(1, 2)  # dummy
+                pred_cls = torch.zeros((anchor_centers.size(0), self.nc), device=self.device)  # dummy
+                # SimOTA分配
+                assigner = SimOTAAssigner()
+                pos_mask, assigned_gt = assigner.assign(anchor_centers, gt_boxes, gt_classes, pred_cls, pred_box)
+                pos_idx = pos_mask.nonzero(as_tuple=False).squeeze(1)
+                if pos_idx.numel() > 0:
+                    b = t[pos_idx, 0].long()
+                    a = t[pos_idx, 6].long()
+                    gj = (t[pos_idx, 3]).long()
+                    gi = (t[pos_idx, 2]).long()
+                    indices.append((b, a, gj, gi))
+                    tbox.append(t[pos_idx, 2:6])
+                    anch.append(anchors[a])
+                    tcls.append(gt_classes[assigned_gt[pos_idx]])
+                else:
+                    indices.append((torch.tensor([], device=self.device).long(),) * 4)
+                    tbox.append(torch.tensor([], device=self.device))
+                    anch.append(torch.tensor([], device=self.device))
+                    tcls.append(torch.tensor([], device=self.device))
             else:
-                t = targets[0]
-                offsets = 0
-
-            # Define
-            bc, gxy, gwh, a = t.chunk(4, 1)  # (image, class), grid xy, grid wh, anchors
-            a, (b, c) = a.long().view(-1), bc.long().T  # anchors, image, class
-            gij = (gxy - offsets).long()
-            gi, gj = gij.T  # grid indices
-
-            # Append
-            indices.append((b, a, gj.clamp_(0, shape[2] - 1), gi.clamp_(0, shape[3] - 1)))  # image, anchor, grid
-            tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
-            anch.append(anchors[a])  # anchors
-            tcls.append(c)  # class
-
+                indices.append((torch.tensor([], device=self.device).long(),) * 4)
+                tbox.append(torch.tensor([], device=self.device))
+                anch.append(torch.tensor([], device=self.device))
+                tcls.append(torch.tensor([], device=self.device))
         return tcls, tbox, indices, anch
