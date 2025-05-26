@@ -1176,3 +1176,42 @@ class Classify(nn.Module):
         if isinstance(x, list):
             x = torch.cat(x, 1)
         return self.linear(self.drop(self.pool(self.conv(x)).flatten(1)))
+
+
+class DecoupledHead(nn.Module):
+    """
+    YOLOX/YOLOv8风格的解耦检测头：分类和回归分支分开
+    """
+    def __init__(self, in_channels, num_classes, num_anchors=3):
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_anchors = num_anchors
+
+        # 分类分支
+        self.cls_conv1 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
+        self.cls_conv2 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
+        self.cls_pred = nn.Conv2d(in_channels, num_anchors * num_classes, 1)
+
+        # 回归分支
+        self.reg_conv1 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
+        self.reg_conv2 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
+        self.reg_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
+        self.obj_pred = nn.Conv2d(in_channels, num_anchors * 1, 1)
+
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        # 分类分支
+        cls_feat = self.act(self.cls_conv1(x))
+        cls_feat = self.act(self.cls_conv2(cls_feat))
+        cls_output = self.cls_pred(cls_feat)
+
+        # 回归分支
+        reg_feat = self.act(self.reg_conv1(x))
+        reg_feat = self.act(self.reg_conv2(reg_feat))
+        reg_output = self.reg_pred(reg_feat)
+        obj_output = self.obj_pred(reg_feat)
+
+        # 输出格式与YOLO Detect一致：[bs, anchors*(num_classes+5), h, w]
+        out = torch.cat([reg_output, obj_output, cls_output], dim=1)
+        return out

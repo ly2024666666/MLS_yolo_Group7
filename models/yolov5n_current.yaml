@@ -48,5 +48,5 @@ head: [
 #    [-1, 1, CBAM, []], #CBAM
     [-1, 1, CoordAtt, []], #CA
 
-    [[17, 20, 23], 1, Detect, [nc, anchors]], # Detect(P3, P4, P5)
+    [[17, 20, 23], 1, DecoupledHead, [nc]], # 这里用DecoupledHead替换Detect
   ]
