@@ -34,6 +34,7 @@ from utils.general import (
     yaml_load,
 )
 
+
 class DetectMultiBackend(nn.Module):
     """YOLOv5 MultiBackend class for inference on various backends including PyTorch, ONNX, TensorRT, and more."""
 
@@ -389,4 +390,3 @@ class DetectMultiBackend(nn.Module):
             d = yaml_load(f)
             return d["stride"], d["names"]  # assign stride, names
         return None, None
-

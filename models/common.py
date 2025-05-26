@@ -70,6 +70,7 @@ def autopad(k, p=None, d=1):
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
     return p
 
+
 # BiFPN
 # 两个特征图add操作
 class BiFPN_Add2(nn.Module):
@@ -103,6 +104,7 @@ class BiFPN_Add3(nn.Module):
         weight = w / (torch.sum(w, dim=0) + self.epsilon)
         # Fast normalized fusion
         return self.conv(self.silu(weight[0] * x[0] + weight[1] * x[1] + weight[2] * x[2]))
+
 
 
 class CustomAttentionModule(nn.Module):

@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 from conv_blocks import *
-from transformer_blocks import TransformerBlock
 from CSP_block import SPP
+from transformer_blocks import TransformerBlock
+
 
 class BottleneckCSP(nn.Module):
     """CSP bottleneck layer for feature extraction with cross-stage partial connections and optional shortcuts."""
@@ -47,7 +48,8 @@ class C3(nn.Module):
     def forward(self, x):
         """Performs forward propagation using concatenated outputs from two convolutions and a Bottleneck sequence."""
         return self.cv3(torch.cat((self.m(self.cv1(x)), self.cv2(x)), 1))
-    
+
+
 class C3x(C3):
     """Extends the C3 module with cross-convolutions for enhanced feature extraction in neural networks."""
 
