@@ -110,7 +110,7 @@ class ComputeLoss:
     sort_obj_iou = False
 
     # Compute losses
-    def __init__(self, model, autobalance=False):
+    def __init__(self, model, autobalance=False, iou_type='CIoU'):
         """Initializes ComputeLoss with model and autobalance option, autobalances losses if True."""
         device = next(model.parameters()).device  # get model device
         h = model.hyp  # hyperparameters
@@ -157,7 +157,13 @@ class ComputeLoss:
                 pxy = pxy.sigmoid() * 2 - 0.5
                 pwh = (pwh.sigmoid() * 2) ** 2 * anchors[i]
                 pbox = torch.cat((pxy, pwh), 1)  # predicted box
-                iou = bbox_iou(pbox, tbox[i], CIoU=True).squeeze()  # iou(prediction, target)
+                
+                # 根据配置选择不同的IoU损失函数
+                if self.iou_type == 'DIOU':
+                    iou = bbox_iou(pbox, tbox[i], DIoU=True).squeeze()
+                else:  # IOU (default)
+                    iou = bbox_iou(pbox, tbox[i]).squeeze()  # iou(prediction, target)
+                    
                 lbox += (1.0 - iou).mean()  # iou loss
 
                 # Objectness
