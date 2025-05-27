@@ -29,8 +29,6 @@ from utils.general import (
 )
 
 
-
-
 class Detections:
     """Manages YOLOv5 detection results with methods for visualization, saving, cropping, and exporting detections."""
 
@@ -188,4 +186,3 @@ class Detections:
     def __repr__(self):
         """Returns a string representation of the YOLOv5 object, including its class and formatted results."""
         return f"YOLOv5 {self.__class__} instance\n" + self.__str__()
-
