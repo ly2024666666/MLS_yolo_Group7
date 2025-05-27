@@ -670,7 +670,7 @@ class DetectMultiBackend(nn.Module):
                 gd.ParseFromString(f.read())
             frozen_func = wrap_frozen_graph(gd, inputs="x:0", outputs=gd_outputs(gd))
         elif tflite or edgetpu:  # https://www.tensorflow.org/lite/guide/python#install_tensorflow_lite_for_python
-            try:  # https://coral.ai/docs/edgetpu/tflite-python/#update-existing-tf-lite-code-for-the-edge-tpu
+            try:  # https://coral.ai/docs/edgetpu/tflite-python/#update_existing_tf_lite_code_for_the_edge_tpu
                 from tflite_runtime.interpreter import Interpreter, load_delegate
             except ImportError:
                 import tensorflow as tf
@@ -1182,36 +1182,122 @@ class DecoupledHead(nn.Module):
     """
     YOLOX/YOLOv8风格的解耦检测头：分类和回归分支分开
     """
-    def __init__(self, in_channels, num_classes, num_anchors=3):
+    def __init__(self, nc=80, anchors=(), ch=(), inplace=True):
         super().__init__()
-        self.num_classes = num_classes
-        self.num_anchors = num_anchors
+        # 兼容原始Detect的参数格式
+        self.nc = nc  # number of classes
+        self.no = nc + 5  # number of outputs per anchor
+        
+        # 处理anchors参数，可能是int或list
+        if isinstance(anchors, int):
+            # 如果anchors是整数，创建默认的anchor配置
+            self.nl = len(ch) if ch else 3  # 检测层数量，默认为3
+            self.na = anchors if anchors > 0 else 3  # anchors数量，默认为3
+            # 创建默认anchors
+            default_anchors = [
+                [10, 13, 16, 19, 33, 23],  # P3/8
+                [30, 61, 62, 45, 59, 119],  # P4/16
+                [116, 90, 156, 198, 373, 326]  # P5/32
+            ]
+            # 根据检测层数量调整anchors
+            if self.nl <= len(default_anchors):
+                anchors_list = default_anchors[:self.nl]
+            else:
+                # 如果需要更多层，重复最后一个anchor配置
+                anchors_list = default_anchors + [default_anchors[-1]] * (self.nl - len(default_anchors))
+            
+            # 确保anchors_list不为空
+            if not anchors_list:
+                anchors_list = default_anchors[:3]  # 至少使用3层
+                self.nl = 3
+            
+            self.register_buffer("anchors", torch.tensor(anchors_list).float().view(self.nl, -1, 2))
+        elif len(anchors) > 0:
+            # 原始的anchors列表格式
+            self.nl = len(anchors)  # number of detection layers
+            self.na = len(anchors[0]) // 2  # number of anchors
+            self.register_buffer("anchors", torch.tensor(anchors).float().view(self.nl, -1, 2))  # shape(nl,na,2)
+        else:
+            # 空的anchors，使用默认配置
+            self.nl = len(ch) if ch else 3
+            self.na = 3
+            default_anchors = [
+                [10, 13, 16, 19, 33, 23],  # P3/8
+                [30, 61, 62, 45, 59, 119],  # P4/16
+                [116, 90, 156, 198, 373, 326]  # P5/32
+            ]
+            anchors_list = default_anchors[:self.nl] if self.nl <= 3 else default_anchors
+            self.register_buffer("anchors", torch.tensor(anchors_list).float().view(len(anchors_list), -1, 2))
+        
+        self.grid = [torch.empty(0) for _ in range(self.nl)]  # init grid
+        self.anchor_grid = [torch.empty(0) for _ in range(self.nl)]  # init anchor grid
+        self.inplace = inplace  # use inplace ops (e.g. slice assignment)
 
-        # 分类分支
-        self.cls_conv1 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
-        self.cls_conv2 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
-        self.cls_pred = nn.Conv2d(in_channels, num_anchors * num_classes, 1)
+        # 为每个检测层创建解耦的分类和回归分支
+        self.cls_convs = nn.ModuleList()
+        self.reg_convs = nn.ModuleList()
+        self.cls_preds = nn.ModuleList()
+        self.reg_preds = nn.ModuleList()
+        self.obj_preds = nn.ModuleList()
 
-        # 回归分支
-        self.reg_conv1 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
-        self.reg_conv2 = nn.Conv2d(in_channels, in_channels, 3, 1, 1)
-        self.reg_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
-        self.obj_pred = nn.Conv2d(in_channels, num_anchors * 1, 1)
+        for i, x in enumerate(ch):
+            # 分类分支
+            cls_conv = nn.Sequential(
+                nn.Conv2d(x, x, 3, 1, 1),
+                nn.SiLU(),
+                nn.Conv2d(x, x, 3, 1, 1),
+                nn.SiLU()
+            )
+            cls_pred = nn.Conv2d(x, self.na * self.nc, 1)
+            
+            # 回归分支
+            reg_conv = nn.Sequential(
+                nn.Conv2d(x, x, 3, 1, 1),
+                nn.SiLU(),
+                nn.Conv2d(x, x, 3, 1, 1),
+                nn.SiLU()
+            )
+            reg_pred = nn.Conv2d(x, self.na * 4, 1)
+            obj_pred = nn.Conv2d(x, self.na * 1, 1)
 
-        self.act = nn.SiLU()
+            self.cls_convs.append(cls_conv)
+            self.reg_convs.append(reg_conv)
+            self.cls_preds.append(cls_pred)
+            self.reg_preds.append(reg_pred)
+            self.obj_preds.append(obj_pred)
+
+        # 为了与原始代码兼容，创建m属性
+        self.m = nn.ModuleList()
+        for i in range(self.nl):
+            # 创建一个组合层，输出与原始Detect相同的格式
+            combined_layer = nn.Identity()  # 占位符
+            self.m.append(combined_layer)
 
     def forward(self, x):
-        # 分类分支
-        cls_feat = self.act(self.cls_conv1(x))
-        cls_feat = self.act(self.cls_conv2(cls_feat))
-        cls_output = self.cls_pred(cls_feat)
+        """处理多层输入，返回与Detect相同格式的输出"""
+        z = []  # inference output
+        for i in range(self.nl):
+            # 分类分支
+            cls_feat = self.cls_convs[i](x[i])
+            cls_output = self.cls_preds[i](cls_feat)
 
-        # 回归分支
-        reg_feat = self.act(self.reg_conv1(x))
-        reg_feat = self.act(self.reg_conv2(reg_feat))
-        reg_output = self.reg_pred(reg_feat)
-        obj_output = self.obj_pred(reg_feat)
+            # 回归分支
+            reg_feat = self.reg_convs[i](x[i])
+            reg_output = self.reg_preds[i](reg_feat)
+            obj_output = self.obj_preds[i](reg_feat)
 
-        # 输出格式与YOLO Detect一致：[bs, anchors*(num_classes+5), h, w]
-        out = torch.cat([reg_output, obj_output, cls_output], dim=1)
-        return out
+            # 输出格式与YOLO Detect一致：[bs, anchors*(4+1+num_classes), h, w]
+            out = torch.cat([reg_output, obj_output, cls_output], dim=1)
+            
+            # 重塑为与Detect相同的格式
+            bs, _, ny, nx = out.shape
+            out = out.view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+            
+            if not self.training:  # inference
+                # 这里可以添加推理时的后处理逻辑，类似于Detect类
+                # 为了简化，暂时直接输出
+                z.append(out.view(bs, self.na * nx * ny, self.no))
+            else:
+                z.append(out)
+
+        return z if not self.training else x

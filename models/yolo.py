@@ -270,6 +270,29 @@ class DetectionModel(BaseModel):
         self.info()
         LOGGER.info("")
 
+        # 确保stride是tensor类型
+        m = self.model[-1]
+        if hasattr(m, 'stride') and isinstance(m.stride, torch.Tensor):
+            self.stride = m.stride
+        else:
+            # 根据检测层数量设置默认步长
+            if isinstance(m, (Detect, Segment)):
+                num_layers = len(m.m)  # 检测层数量
+                if num_layers == 3:
+                    self.stride = torch.tensor([8., 16., 32.])
+                elif num_layers == 4:
+                    self.stride = torch.tensor([8., 16., 32., 64.])
+                else:
+                    self.stride = torch.tensor([8., 16., 32.])
+            elif isinstance(m, DecoupledHead):
+                # DecoupledHead的步长
+                if hasattr(m, 'stride') and isinstance(m.stride, list):
+                    self.stride = torch.tensor(m.stride, dtype=torch.float32)
+                else:
+                    self.stride = torch.tensor([8., 16., 32.])
+            else:
+                self.stride = torch.tensor([8., 16., 32.])
+
     def forward(self, x, augment=False, profile=False, visualize=False):
         """Performs single-scale or augmented inference and may include profiling or visualization."""
         if augment:
@@ -429,7 +452,8 @@ def parse_model(d, ch):
             C3x,
             DecoupledHead,
         }:
-            c1, c2 = ch[f], args[0]
+            c1 = ch[f] if isinstance(f, int) else ch[f[0]]
+            c2 = args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, ch_mul)
 
@@ -445,12 +469,16 @@ def parse_model(d, ch):
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         # TODO: channel, gw, gd
-        elif m in {Detect, Segment}:
+        elif m in {Detect, Segment, DecoupledHead}:
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)
             if m is Segment:
                 args[3] = make_divisible(args[3] * gw, ch_mul)
+            if m is DecoupledHead:
+                # DecoupledHead使用与Detect相同的参数格式
+                # args = [nc, anchors, ch]
+                pass  # 已经在上面处理了args.append([ch[x] for x in f])
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
