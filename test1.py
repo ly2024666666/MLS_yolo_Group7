@@ -22,10 +22,10 @@ from models.yolo import Model  # 导入本地修改后的 Model 类
 
 # 加载自定义模型（使用本地代码）
 device = torch.device("cpu")  # 或 "cuda"
-ckpt_path = r"E:\机器学习PJ\yolov5\runs\train\exp3\weights\best.pt"
+ckpt_path = r"C:\Users\alicerunqi\Desktop\大三下\机器学习\MLS_yolo_Group7\runs\train\exp2\weights\best.pt"
 
 # 手动构建模型（需匹配训练时的 cfg 文件）
-model = Model(cfg=r"E:\机器学习PJ\yolov5\models\yolov5s.yaml", ch=3, nc=80)  # 替换为你的 YAML 路径
+model = Model(cfg=r"C:\Users\alicerunqi\Desktop\大三下\机器学习\MLS_yolo_Group7\models\yolov5s.yaml", ch=3, nc=80)  # 替换为你的 YAML 路径
 ckpt = torch.load(ckpt_path, map_location=device)
 model.load_state_dict(ckpt["model"].state_dict())
 model = model.to(device).eval()

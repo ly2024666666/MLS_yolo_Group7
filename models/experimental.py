@@ -97,7 +97,12 @@ def attempt_load(weights, device=None, inplace=True, fuse=True):
     model = Ensemble()
     for w in weights if isinstance(weights, list) else [weights]:
         ckpt = torch.load(attempt_download(w), map_location="cpu")  # load
-        ckpt = (ckpt.get("ema") or ckpt["model"]).to(device).float()  # FP32 model
+        print("attempt_loadattempt_loadattempt_loadattempt_loadattempt_load")
+        if isinstance(ckpt, dict) and 'model' in ckpt:
+            ckpt = ckpt['model']
+        elif not isinstance(ckpt, torch.nn.Module):
+            raise TypeError(f"Checkpoint {w} does not contain a model")
+        ckpt = ckpt.to(device).float()  # FP32 model
 
         # Model compatibility updates
         if not hasattr(ckpt, "stride"):

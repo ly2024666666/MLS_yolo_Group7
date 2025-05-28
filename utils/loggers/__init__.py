@@ -117,10 +117,10 @@ class Loggers:
             self.logger.info(s)
         # TensorBoard
         s = self.save_dir
-        if "tb" in self.include and not self.opt.evolve:
-            prefix = colorstr("TensorBoard: ")
-            self.logger.info(f"{prefix}Start with 'tensorboard --logdir {s.parent}', view at http://localhost:6006/")
-            self.tb = SummaryWriter(str(s))
+        # if "tb" in self.include and not self.opt.evolve:
+        #     prefix = colorstr("TensorBoard: ")
+        #     self.logger.info(f"{prefix}Start with 'tensorboard --logdir {s.parent}', view at http://localhost:6006/")
+        #     self.tb = SummaryWriter(str(s))
 
         # W&B
         if wandb and "wandb" in self.include:
