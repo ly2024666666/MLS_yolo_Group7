@@ -839,7 +839,7 @@ class AutoShape(nn.Module):
     agnostic = False  # NMS class-agnostic
     multi_label = False  # NMS multiple labels per box
     classes = None  # (optional list) filter by class, i.e. = [0, 15, 16] for COCO persons, cats and dogs
-    max_det = 1000  # maximum number of detections per image
+    max_det = 10  # maximum number of detections per image
     amp = False  # Automatic Mixed Precision (AMP) inference
 
     def __init__(self, model, verbose=True):

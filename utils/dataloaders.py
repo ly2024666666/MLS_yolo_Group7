@@ -176,6 +176,7 @@ def create_dataloader(
     prefix="",
     shuffle=False,
     seed=0,
+    iscutface=False,
 ):
     """Creates and returns a configured DataLoader instance for loading and processing image datasets."""
     if rect and shuffle:
@@ -196,6 +197,7 @@ def create_dataloader(
             image_weights=image_weights,
             prefix=prefix,
             rank=rank,
+            iscutface=iscutface,
         )
 
     batch_size = min(batch_size, len(dataset))
@@ -323,7 +325,7 @@ class LoadScreenshots:
 class LoadImages:
     """YOLOv5 image/video dataloader, i.e. `python detect.py --source image.jpg/vid.mp4`."""
 
-    def __init__(self, path, img_size=640, stride=32, auto=True, transforms=None, vid_stride=1):
+    def __init__(self, path, img_size=640, stride=32, auto=True, transforms=None, vid_stride=1, iscutface=False):
         """Initializes YOLOv5 loader for images/videos, supporting glob patterns, directories, and lists of paths."""
         if isinstance(path, str) and Path(path).suffix == ".txt":  # *.txt file with img/vid/dir on each line
             path = Path(path).read_text().rsplit()
@@ -359,6 +361,59 @@ class LoadImages:
         assert self.nf > 0, (
             f"No images or videos found in {p}. Supported formats are:\nimages: {IMG_FORMATS}\nvideos: {VID_FORMATS}"
         )
+        self.iscutface = iscutface
+        from facenet_pytorch import MTCNN
+        self.mtcnn = MTCNN(thresholds=[0.9, 0.9, 0.95],keep_all=False, device='cuda' if torch.cuda.is_available() else 'cpu')
+
+    def detect_and_crop_face(self, img_cv2, expand_ratio=0.3):
+        h0, w0 = img_cv2.shape[:2]
+        img_pil = Image.fromarray(cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB))
+        box = self.mtcnn.detect(img_pil)[0]
+        if box is not None:
+            x1, y1, x2, y2 = map(int, box[0])
+
+            # 计算框的宽度和高度
+            bw = x2 - x1
+            bh = y2 - y1
+
+            # 扩大边界（向外扩 expand_ratio 的比例）
+            x1 = max(int(x1 - bw * expand_ratio), 0)
+            y1 = max(int(y1 - bh * expand_ratio), 0)
+            x2 = min(int(x2 + bw * expand_ratio), w0)
+            y2 = min(int(y2 + bh * expand_ratio), h0)
+
+            # 裁剪图像
+            img_crop = img_cv2[y1:y2, x1:x2]
+            h, w = img_crop.shape[:2]
+            return img_crop, (h0, w0), (h, w), (x1, y1, x2, y2)
+
+        # 没检测到人脸，返回原图
+        return None, (h0, w0), (h0, w0), (0, 0, w0, h0)
+
+    def adjust_labels_after_crop(self, labels, crop_box, orig_size, new_size):
+        x1, y1, x2, y2 = crop_box
+        ow, oh = orig_size[1], orig_size[0]
+        nw, nh = new_size[1], new_size[0]
+
+        adjusted = []
+        for label in labels:
+            cls, cx, cy, w, h = label
+            abs_x = cx * ow
+            abs_y = cy * oh
+            abs_w = w * ow
+            abs_h = h * oh
+
+            if not (x1 <= abs_x <= x2 and y1 <= abs_y <= y2):
+                continue
+
+            new_x = (abs_x - x1) / (x2 - x1)
+            new_y = (abs_y - y1) / (y2 - y1)
+            new_w = abs_w / (x2 - x1)
+            new_h = abs_h / (y2 - y1)
+
+            adjusted.append([cls, new_x, new_y, new_w, new_h])
+
+        return np.array(adjusted)
 
     def __iter__(self):
         """Initializes iterator by resetting count and returns the iterator object itself."""
@@ -397,6 +452,11 @@ class LoadImages:
             assert im0 is not None, f"Image Not Found {path}"
             s = f"image {self.count}/{self.nf} {path}: "
 
+        if self.iscutface:
+            im0_0, (h0, w0), (h, w), crop_box =self.detect_and_crop_face(im0)
+            print("cutting face......")
+            if im0_0 is not None:
+                im0 = im0_0
         if self.transforms:
             im = self.transforms(im0)  # transforms
         else:
@@ -558,6 +618,7 @@ class LoadImagesAndLabels(Dataset):
         prefix="",
         rank=-1,
         seed=0,
+        iscutface=False,
     ):
         """Initializes the YOLOv5 dataset loader, handling images and their labels, caching, and preprocessing."""
         self.img_size = img_size
@@ -570,6 +631,11 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations(size=img_size) if augment else None
+        from facenet_pytorch import MTCNN
+        self.mtcnn = MTCNN(thresholds=[0.9, 0.9, 0.95],keep_all=False, device='cuda' if torch.cuda.is_available() else 'cpu')
+        self.iscutface = iscutface
+
+
 
         try:
             f = []  # image files
@@ -770,6 +836,57 @@ class LoadImagesAndLabels(Dataset):
     #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
     #     return self
 
+    def detect_and_crop_face(self, img_cv2, expand_ratio=0.3):
+        h0, w0 = img_cv2.shape[:2]
+        img_pil = Image.fromarray(cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB))
+        box = self.mtcnn.detect(img_pil)[0]
+        if box is not None:
+            x1, y1, x2, y2 = map(int, box[0])
+
+            # 计算框的宽度和高度
+            bw = x2 - x1
+            bh = y2 - y1
+
+            # 扩大边界（向外扩 expand_ratio 的比例）
+            x1 = max(int(x1 - bw * expand_ratio), 0)
+            y1 = max(int(y1 - bh * expand_ratio), 0)
+            x2 = min(int(x2 + bw * expand_ratio), w0)
+            y2 = min(int(y2 + bh * expand_ratio), h0)
+
+            # 裁剪图像
+            img_crop = img_cv2[y1:y2, x1:x2]
+            h, w = img_crop.shape[:2]
+            return img_crop, (h0, w0), (h, w), (x1, y1, x2, y2)
+
+        # 没检测到人脸，返回原图
+        return img_cv2, (h0, w0), (h0, w0), (0, 0, w0, h0)
+
+    def adjust_labels_after_crop(self, labels, crop_box, orig_size, new_size):
+        x1, y1, x2, y2 = crop_box
+        ow, oh = orig_size[1], orig_size[0]
+        nw, nh = new_size[1], new_size[0]
+
+        adjusted = []
+        for label in labels:
+            cls, cx, cy, w, h = label
+            abs_x = cx * ow
+            abs_y = cy * oh
+            abs_w = w * ow
+            abs_h = h * oh
+
+            if not (x1 <= abs_x <= x2 and y1 <= abs_y <= y2):
+                continue
+
+            new_x = (abs_x - x1) / (x2 - x1)
+            new_y = (abs_y - y1) / (y2 - y1)
+            new_w = abs_w / (x2 - x1)
+            new_h = abs_h / (y2 - y1)
+
+            adjusted.append([cls, new_x, new_y, new_w, new_h])
+
+        return np.array(adjusted)
+
+
     def __getitem__(self, index):
         """Fetches the dataset item at the given index, considering linear, shuffled, or weighted sampling."""
         index = self.indices[index]  # linear, shuffled, or image_weights
@@ -787,6 +904,10 @@ class LoadImagesAndLabels(Dataset):
         else:
             # Load image
             img, (h0, w0), (h, w) = self.load_image(index)
+            h_orig, w_orig = h, w
+            if self.iscutface:
+                print("cuting face....")
+                img, (h0, w0), (h, w), crop_box =self.detect_and_crop_face(img)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -794,6 +915,9 @@ class LoadImagesAndLabels(Dataset):
             shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
 
             labels = self.labels[index].copy()
+            if self.iscutface:
+                labels = self.adjust_labels_after_crop(labels, crop_box, (h_orig, w_orig), (h, w))
+
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
 
