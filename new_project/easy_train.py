@@ -219,7 +219,7 @@ def train(hyp, opt, device, callbacks):
         prefix=colorstr("train: "),
         shuffle=True,
         seed=opt.seed,
-        iscutface=False,
+        iscutface=True,
     )
     labels = np.concatenate(dataset.labels, 0)
     mlc = int(labels[:, 0].max())  # max label class
@@ -239,7 +239,7 @@ def train(hyp, opt, device, callbacks):
         workers=workers * 2,
         pad=0.5,
         prefix=colorstr("val: "),
-        iscutface=False,
+        iscutface=True,
     )[0]
 
     if not opt.noautoanchor:
@@ -275,7 +275,7 @@ def train(hyp, opt, device, callbacks):
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     stopper, stop = EarlyStopping(patience=opt.patience), False
-    compute_loss = ComputeLoss(model,iou_type=opt.loss_function,Focal=opt.Focal)  # init loss class
+    compute_loss = ComputeLoss(model)  # init loss class
     callbacks.run("on_train_start")
     LOGGER.info(
         f"Image sizes {imgsz} train, {imgsz} val\n"
@@ -468,11 +468,6 @@ def parse_opt(known=False):
     # Logger arguments
     parser.add_argument("--bbox_interval", type=int, default=-1, help="Set bounding-box image logging interval")
     parser.add_argument("--artifact_alias", type=str, default="latest", help="Version of dataset artifact to use")
-
-
-    # add loss
-    parser.add_argument("--loss_function", type=str, default="loss", help="Set loss function")
-    parser.add_argument("--Focal", action="store_true", help="Loss Focal")
 
 
     return parser.parse_known_args()[0] if known else parser.parse_args()

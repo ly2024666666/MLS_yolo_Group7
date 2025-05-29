@@ -657,7 +657,10 @@ class LoadImagesAndLabels(Dataset):
             assert self.im_files, f"{prefix}No images found"
         except Exception as e:
             raise Exception(f"{prefix}Error loading data from {path}: {e}\n{HELP_URL}") from e
+        
 
+        augmented = self.augment_with_face_crop(self.im_files)
+        self.im_files += augmented
         # Check cache
         self.label_files = img2label_paths(self.im_files)  # labels
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix(".cache")
@@ -766,6 +769,131 @@ class LoadImagesAndLabels(Dataset):
                         b += self.ims[i].nbytes * WORLD_SIZE
                     pbar.desc = f"{prefix}Caching images ({b / gb:.1f}GB {cache_images})"
                 pbar.close()
+
+
+
+
+    def augment_with_face_crop( self,
+        image_paths,
+        img_dir="images",
+        label_dir="labels",
+        expand_ratio=0.3,
+        ):
+        """
+        基于人脸检测裁剪并增强数据（仅当目标完全落在扩展后的人脸框内）。
+        
+        参数：
+            image_paths (List[str]): 原始图像路径列表。
+            img_dir (str): 原始图像根目录（用于路径替换）。
+            label_dir (str): 原始标签目录。
+            save_img_dir (str): 增强图像保存目录。
+            save_label_dir (str): 增强标签保存目录。
+            expand_ratio (float): 对检测到的人脸框按比例扩展。
+            device (str): 使用的设备，默认自动检测。
+        
+        返回：
+            List[str]: 新增图像路径列表。
+        """
+        if isinstance(self.path, list):
+            pass
+        else:
+            p = Path(self.path)
+            root_dir = Path(p).parent if Path(p).is_dir() else Path(p).parent.parent
+
+            # 定义保存裁剪后图像和标签的目录名
+            save_img_dir = root_dir / "images_cropped"
+            save_label_dir = root_dir / "labels_cropped"
+
+            # 创建目录
+            save_img_dir.mkdir(parents=True, exist_ok=True)
+            save_label_dir.mkdir(parents=True, exist_ok=True)
+
+        augmented_files = []
+
+        for img_path in tqdm(image_paths, desc="Face crop augmentation"):
+            try:
+                img = Image.open(img_path).convert("RGB")
+                w, h = img.size
+                boxes, _ = self.mtcnn.detect(img)
+
+                if boxes is None:
+                    continue
+
+                x1, y1, x2, y2 = boxes[0]
+                bw, bh = x2 - x1, y2 - y1
+
+                # 放缩人脸框
+                x1 = max(int(x1 - bw * expand_ratio), 0)
+                y1 = max(int(y1 - bh * expand_ratio), 0)
+                x2 = min(int(x2 + bw * expand_ratio), w)
+                y2 = min(int(y2 + bh * expand_ratio), h)
+
+                face_w, face_h = x2 - x1, y2 - y1
+
+                # 原图中对应标签文件
+                label_path = Path(img_path).with_suffix(".txt").as_posix().replace(img_dir, label_dir)
+                if not os.path.exists(label_path):
+                    continue
+
+                with open(label_path, "r") as f_label:
+                    lines = f_label.readlines()
+
+                new_labels = []
+                keep = False
+
+                for line in lines:
+                    cls, cx, cy, bw, bh = map(float, line.strip().split())
+                    abs_cx, abs_cy = cx * w, cy * h
+                    abs_bw, abs_bh = bw * w, bh * h
+                    x_min = abs_cx - abs_bw / 2
+                    y_min = abs_cy - abs_bh / 2
+                    x_max = abs_cx + abs_bw / 2
+                    y_max = abs_cy + abs_bh / 2
+
+                    # 计算与人脸框的交集区域
+                    inter_x1 = max(x_min, x1)
+                    inter_y1 = max(y_min, y1)
+                    inter_x2 = min(x_max, x2)
+                    inter_y2 = min(y_max, y2)
+                    inter_w = max(inter_x2 - inter_x1, 0)
+                    inter_h = max(inter_y2 - inter_y1, 0)
+                    inter_area = inter_w * inter_h
+                    box_area = (x_max - x_min) * (y_max - y_min)
+
+                    if box_area == 0:
+                        continue
+
+                    overlap_ratio = inter_area / box_area
+
+                    # 修改为只要香烟80%以上在人脸框中就保留
+                    if overlap_ratio >= 0.85:
+                        new_cx = (abs_cx - x1) / face_w
+                        new_cy = (abs_cy - y1) / face_h
+                        new_bw = abs_bw / face_w
+                        new_bh = abs_bh / face_h
+                        new_labels.append(f"{int(cls)} {new_cx:.6f} {new_cy:.6f} {new_bw:.6f} {new_bh:.6f}")
+                        keep = True
+
+                if not keep:
+                    continue
+
+                # 裁剪图像
+                cropped_img = img.crop((x1, y1, x2, y2))
+                new_img_path = save_img_dir / Path(img_path).name
+                new_lbl_path = save_label_dir / Path(label_path).name
+
+                cropped_img.save(new_img_path)
+                with open(new_lbl_path, "w") as f:
+                    f.write("\n".join(new_labels))
+
+                augmented_files.append(new_img_path.as_posix())
+
+            except Exception as e:
+                print(f"[Warning] Skipped {img_path}: {e}")
+
+        return augmented_files
+
+
 
     def check_cache_ram(self, safety_margin=0.1, prefix=""):
         """Checks if available RAM is sufficient for caching images, adjusting for a safety margin."""
@@ -904,10 +1032,10 @@ class LoadImagesAndLabels(Dataset):
         else:
             # Load image
             img, (h0, w0), (h, w) = self.load_image(index)
-            h_orig, w_orig = h, w
-            if self.iscutface:
-                print("cuting face....")
-                img, (h0, w0), (h, w), crop_box =self.detect_and_crop_face(img)
+            # h_orig, w_orig = h, w
+            # if self.iscutface:
+            #     print("cuting face....")
+            #     img, (h0, w0), (h, w), crop_box =self.detect_and_crop_face(img)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -915,8 +1043,8 @@ class LoadImagesAndLabels(Dataset):
             shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
 
             labels = self.labels[index].copy()
-            if self.iscutface:
-                labels = self.adjust_labels_after_crop(labels, crop_box, (h_orig, w_orig), (h, w))
+            # if self.iscutface:
+            #     labels = self.adjust_labels_after_crop(labels, crop_box, (h_orig, w_orig), (h, w))
 
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
