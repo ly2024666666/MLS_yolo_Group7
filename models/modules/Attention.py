@@ -1,7 +1,7 @@
+
 import torch
 import torch.nn as nn
-import math
-import torch.nn.functional as F
+
 
 class CustomAttentionModule(nn.Module):
     def __init__(self, channels):
@@ -67,19 +67,20 @@ class CBAM(nn.Module):
         """Applies the forward pass through C1 module."""
         return self.spatial_attention(self.channel_attention(x))
 
+
 class h_sigmoid(nn.Module):
     def __init__(self, inplace=True):
-        super(h_sigmoid, self).__init__()
+        super().__init__()
         self.relu = nn.ReLU6(inplace=inplace)
 
     def forward(self, x):
         return self.relu(x + 3) / 6
 
 
-#CA
+# CA
 class h_swish(nn.Module):
     def __init__(self, inplace=True):
-        super(h_swish, self).__init__()
+        super().__init__()
         self.sigmoid = h_sigmoid(inplace=inplace)
 
     def forward(self, x):
@@ -88,7 +89,7 @@ class h_swish(nn.Module):
 
 class CoordAtt(nn.Module):
     def __init__(self, inp, reduction=32):
-        super(CoordAtt, self).__init__()
+        super().__init__()
         oup = inp
         self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
         self.pool_w = nn.AdaptiveAvgPool2d((1, None))
