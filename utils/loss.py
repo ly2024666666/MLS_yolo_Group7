@@ -136,6 +136,7 @@ class ComputeLoss:
         self.nl = m.nl  # number of layers
         self.anchors = m.anchors
         self.device = device
+        self.iou_type = iou_type  # 添加iou_type属性
 
     def __call__(self, p, targets):  # predictions, targets
         """Performs forward pass, calculating class, box, and object loss for given predictions and targets."""
@@ -159,9 +160,19 @@ class ComputeLoss:
                 pbox = torch.cat((pxy, pwh), 1)  # predicted box
                 
                 # 根据配置选择不同的IoU损失函数
-                if self.iou_type == 'DIOU':
+                if self.iou_type == 'SIoU':
+                    iou = bbox_iou(pbox, tbox[i], SIoU=True, alpha=1).squeeze()  # SIoU损失，alpha=1
+                elif self.iou_type == 'alpha-SIoU':
+                    iou = bbox_iou(pbox, tbox[i], SIoU=True, alpha=3).squeeze()  # alpha-SIoU损失，alpha=3
+                elif self.iou_type == 'DIoU':
                     iou = bbox_iou(pbox, tbox[i], DIoU=True).squeeze()
-                else:  # IOU (default)
+                elif self.iou_type == 'CIoU':
+                    iou = bbox_iou(pbox, tbox[i], CIoU=True).squeeze()
+                elif self.iou_type == 'GIoU':
+                    iou = bbox_iou(pbox, tbox[i], GIoU=True).squeeze()
+                elif self.iou_type == 'EIoU':
+                    iou = bbox_iou(pbox, tbox[i], EIoU=True).squeeze()
+                else:  # IoU (default)
                     iou = bbox_iou(pbox, tbox[i]).squeeze()  # iou(prediction, target)
                     
                 lbox += (1.0 - iou).mean()  # iou loss
