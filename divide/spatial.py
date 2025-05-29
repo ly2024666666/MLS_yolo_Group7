@@ -1,7 +1,6 @@
-import torch
 import torch.nn as nn
 import warnings
-from conv_blocks import *
+from divide.conv_blocks import *
 
 class SPP(nn.Module):
     """Implements Spatial Pyramid Pooling (SPP) for feature extraction, ref: https://arxiv.org/abs/1406.4729."""

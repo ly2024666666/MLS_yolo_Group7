@@ -6,6 +6,7 @@ YOLO-specific modules.
 Usage:
     $ python models/yolo.py --cfg yolov5s.yaml
 """
+from divide.conv_blocks import GSConv
 from .modules import *
 import argparse
 import contextlib
@@ -49,7 +50,6 @@ from models.common import (
     GhostBottleneck,
     GhostConv,
     Proto,
-    CustomAttentionModule,
 )
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
@@ -422,6 +422,7 @@ def parse_model(d, ch):
             nn.ConvTranspose2d,
             DWConvTranspose2d,
             C3x,
+            GSConv,
         }:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output

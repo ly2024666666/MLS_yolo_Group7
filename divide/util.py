@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 # Import 'ultralytics' package or install if missing
@@ -12,7 +11,7 @@ except (ImportError, AssertionError):
     os.system("pip install -U ultralytics")
     import ultralytics
 
-from conv_blocks import *
+from divide.conv_blocks import *
 
 def autopad(k, p=None, d=1):
     """

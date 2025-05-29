@@ -1,6 +1,5 @@
-import torch
 import torch.nn as nn
-from conv_blocks import Conv
+from divide.conv_blocks import Conv
 
 class TransformerLayer(nn.Module):
     """Transformer layer with multihead attention and linear layers, optimized by removing LayerNorm."""

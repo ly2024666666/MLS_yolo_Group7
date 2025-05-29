@@ -1,6 +1,5 @@
-import torch
 import torch.nn as nn
-from conv_blocks import *
+from divide.conv_blocks import *
 from transformer_blocks import TransformerBlock
 from CSP_block import SPP
 
