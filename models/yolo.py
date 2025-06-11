@@ -51,6 +51,7 @@ from models.common import (
     GhostConv,
     Proto,
 )
+from divide.BIFPN import BiFPN_Feature2,BiFPN_Feature3
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
 from utils.general import LOGGER, check_version, check_yaml, colorstr, make_divisible, print_args
@@ -434,6 +435,9 @@ def parse_model(d, ch):
                 n = 1
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
+        #添加bifpn结构
+        elif m in [Concat, BiFPN_Feature2, BiFPN_Feature3]:
+            c2 = sum(ch[x] for x in f)
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         # TODO: channel, gw, gd
