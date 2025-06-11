@@ -122,8 +122,16 @@ class GhostBottleneck(nn.Module):
 
 
 class GSConv(nn.Module):
-    # GSConv https://github.com/AlanLi1997/slim-neck-by-gsconv
     def __init__(self, c1, c2, k=1, s=1, g=1, act=True):
+        """GSConv模块实现
+                Args:
+                    c1 (int): 输入通道数
+                    c2 (int): 输出通道数
+                    k (int, optional): 第一个卷积的核大小. Defaults to 1.
+                    s (int, optional): 第一个卷积的步长. Defaults to 1.
+                    g (int, optional): 第一个卷积的分组数. Defaults to 1.
+                    act (bool, optional): 是否使用激活函数. Defaults to True.
+        """
         super().__init__()
         c_ = c2 // 2
         self.cv1 = Conv(c1, c_, k, s, None, g, 1, act)
