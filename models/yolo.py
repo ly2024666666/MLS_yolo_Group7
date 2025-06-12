@@ -27,31 +27,16 @@ if str(ROOT) not in sys.path:
 if platform.system() != "Windows":
     ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
-from models.common import (
-    C3,
-    C3SPP,
-    C3TR,
-    SPP,
-    SPPF,
-    Bottleneck,
-    BottleneckCSP,
-    C3Ghost,
-    C3x,
-    Classify,
-    Concat,
-    Contract,
-    Conv,
-    CrossConv,
-    DetectMultiBackend,
-    DWConv,
-    DWConvTranspose2d,
-    Expand,
-    Focus,
-    GhostBottleneck,
-    GhostConv,
-    Proto,
-)
+from divide.conv_blocks import (Conv,DWConv,DWConvTranspose2d,Bottleneck,CrossConv,GhostConv,GhostBottleneck,GSConv)
+from divide.CSP_block import (C3,CrossConv,C3SPP,C3TR,Bottleneck,BottleneckCSP,C3Ghost,
+            C3x)
+from divide.spatial import SPP,SPPF,Focus
+from divide.util import Classify,Concat,Contract,Expand,Proto
+from divide.backend import DetectMultiBackend
+from divide.attention import CustomAttentionModule
+# from divide.BiFPN import BiFPN_Add2,BiFPN_Add3
 from divide.BIFPN import BiFPN_Feature2,BiFPN_Feature3
+
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
 from utils.general import LOGGER, check_version, check_yaml, colorstr, make_divisible, print_args

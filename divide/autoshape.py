@@ -19,8 +19,8 @@ except (ImportError, AssertionError):
     os.system("pip install -U ultralytics")
     import ultralytics
 
-from detections import Detections
-from util import DetectMultiBackend
+from .detections import Detections
+from .backend import DetectMultiBackend
 
 from utils.dataloaders import exif_transpose, letterbox
 from utils.general import (

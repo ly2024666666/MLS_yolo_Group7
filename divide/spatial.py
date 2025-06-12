@@ -2,7 +2,7 @@ import warnings
 
 import torch
 import torch.nn as nn
-from conv_blocks import *
+from .conv_blocks import *
 
 
 class SPP(nn.Module):

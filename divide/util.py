@@ -11,7 +11,7 @@ except (ImportError, AssertionError):
     os.system("pip install -U ultralytics")
     import ultralytics
 
-from divide.conv_blocks import *
+from .conv_blocks import *
 
 
 def autopad(k, p=None, d=1):

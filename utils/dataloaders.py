@@ -658,9 +658,9 @@ class LoadImagesAndLabels(Dataset):
         except Exception as e:
             raise Exception(f"{prefix}Error loading data from {path}: {e}\n{HELP_URL}") from e
         
-
-        augmented = self.augment_with_face_crop(self.im_files)
-        self.im_files += augmented
+        if iscutface:
+            augmented = self.augment_with_face_crop(self.im_files)
+            self.im_files += augmented
         # Check cache
         self.label_files = img2label_paths(self.im_files)  # labels
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix(".cache")

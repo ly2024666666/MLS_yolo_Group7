@@ -1,18 +1,14 @@
 import argparse
-import math
 import os
-import random
 import sys
 import time
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 
 import numpy as np
 import torch
-import torch.distributed as dist
-import torch.nn as nn
 import yaml
 from torch.optim import lr_scheduler
 from tqdm import tqdm
@@ -27,49 +23,39 @@ import val as validate  # for end-of-epoch mAP
 from models.experimental import attempt_load
 from models.yolo import Model
 from utils.autoanchor import check_anchors
-from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks
 from utils.dataloaders import create_dataloader
-from utils.downloads import attempt_download, is_url
+from utils.downloads import attempt_download
 from utils.general import (
     LOGGER,
     TQDM_BAR_FORMAT,
     check_amp,
     check_dataset,
     check_file,
-    check_git_info,
-    check_git_status,
     check_img_size,
     check_requirements,
     check_suffix,
     check_yaml,
     colorstr,
-    get_latest_run,
     increment_path,
     init_seeds,
     intersect_dicts,
     labels_to_class_weights,
-    labels_to_image_weights,
     methods,
     one_cycle,
     print_args,
-    print_mutation,
     strip_optimizer,
     yaml_save,
 )
 from utils.loggers import LOGGERS, Loggers
-from utils.loggers.comet.comet_utils import check_comet_resume
 from utils.loss import ComputeLoss
 from utils.metrics import fitness
-from utils.plots import plot_evolve
 from utils.torch_utils import (
     EarlyStopping,
     ModelEMA,
     de_parallel,
     select_device,
-    smart_DDP,
     smart_optimizer,
-    smart_resume,
     torch_distributed_zero_first,
 )
 
@@ -151,6 +137,7 @@ def train(hyp, opt, device, callbacks):
     if pretrained:
         with torch_distributed_zero_first(LOCAL_RANK):
             weights = attempt_download(weights)  # download if not found locally
+        print(weights)
         ckpt = torch.load(weights, map_location="cpu")  # load checkpoint to CPU to avoid CUDA memory leak
         model = Model(cfg or ckpt["model"].yaml, ch=3, nc=nc, anchors=hyp.get("anchors")).to(device)  # create
         exclude = []  # exclude keys
@@ -479,7 +466,6 @@ def parse_opt(known=False):
 def main(opt, callbacks=Callbacks()):
    
     print_args(vars(opt))
-    check_git_status()
     check_requirements(ROOT / "requirements.txt")
 
     opt.data, opt.cfg, opt.hyp, opt.weights, opt.project = (

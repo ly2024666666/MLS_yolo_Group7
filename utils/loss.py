@@ -227,9 +227,6 @@ class ComputeLoss:
         self.device = device
         self.iou_type = iou_type
         self.Focal = Focal
-        print("-------------")
-        print(f"using {self.iou_type}")
-        print("-------------")
 
     def __call__(self, p, targets):  # predictions, targets
         """Performs forward pass, calculating class, box, and object loss for given predictions and targets."""

@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from conv_blocks import *
-from CSP_block import SPP
-from transformer_blocks import TransformerBlock
+from .conv_blocks import *
+from .spatial import SPP
+from .transformer_blocks import TransformerBlock
 
 
 class BottleneckCSP(nn.Module):

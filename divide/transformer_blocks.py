@@ -1,5 +1,5 @@
 import torch.nn as nn
-from divide.conv_blocks import Conv
+from .conv_blocks import Conv
 
 
 class TransformerLayer(nn.Module):

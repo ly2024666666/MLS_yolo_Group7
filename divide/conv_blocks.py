@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from divide.util import autopad
+from .util import autopad
 class Conv(nn.Module):
     """Applies a convolution, batch normalization, and activation function to an input tensor in a neural network."""
 

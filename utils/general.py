@@ -586,8 +586,9 @@ def check_dataset(data, autodownload=True):
 
 def check_amp(model):
     """Checks PyTorch AMP functionality for a model, returns True if AMP operates correctly, otherwise False."""
-    from models.common import AutoShape, DetectMultiBackend
-
+    #from models.common import AutoShape, DetectMultiBackend
+    from divide.autoshape import AutoShape
+    from divide.backend import DetectMultiBackend
     def amp_allclose(model, im):
         """Compares FP32 and AMP model inference outputs, ensuring they are close within a 10% absolute tolerance."""
         m = AutoShape(model, verbose=False)  # model
