@@ -6,7 +6,8 @@ YOLO-specific modules.
 Usage:
     $ python models/yolo.py --cfg yolov5s.yaml
 """
-
+from divide.conv_blocks import GSConv
+from .modules import *
 import argparse
 import contextlib
 import math
@@ -49,8 +50,8 @@ from models.common import (
     GhostBottleneck,
     GhostConv,
     Proto,
-    CustomAttentionModule,
 )
+from divide.BIFPN import BiFPN_Feature2,BiFPN_Feature3
 from models.experimental import MixConv2d
 from utils.autoanchor import check_anchor_order
 from utils.general import LOGGER, check_version, check_yaml, colorstr, make_divisible, print_args
@@ -422,6 +423,7 @@ def parse_model(d, ch):
             nn.ConvTranspose2d,
             DWConvTranspose2d,
             C3x,
+            GSConv,
         }:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
@@ -433,6 +435,9 @@ def parse_model(d, ch):
                 n = 1
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
+        #添加bifpn结构
+        elif m in [Concat, BiFPN_Feature2, BiFPN_Feature3]:
+            c2 = sum(ch[x] for x in f)
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         # TODO: channel, gw, gd
@@ -446,6 +451,9 @@ def parse_model(d, ch):
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
+        elif m in{ CBAM, CoordAtt}:
+            c2 = ch[f]
+            args = [c2, *args]
         else:
             c2 = ch[f]
 

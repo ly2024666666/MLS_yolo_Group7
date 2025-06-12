@@ -17,6 +17,7 @@
 # results.show()  # 在窗口中显示结果
 # results.save()  # 将结果保存到 runs/detect/exp
 import torch
+
 from models.yolo import Model  # 导入本地修改后的 Model 类
 
 # 加载自定义模型（使用本地代码）

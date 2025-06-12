@@ -1,7 +1,9 @@
+import warnings
+
 import torch
 import torch.nn as nn
-import warnings
 from conv_blocks import *
+
 
 class SPP(nn.Module):
     """Implements Spatial Pyramid Pooling (SPP) for feature extraction, ref: https://arxiv.org/abs/1406.4729."""
@@ -65,4 +67,3 @@ class Focus(nn.Module):
         """Processes input through Focus mechanism, reshaping (b,c,w,h) to (b,4c,w/2,h/2) then applies convolution."""
         return self.conv(torch.cat((x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]), 1))
         # return self.conv(self.contract(x))
-

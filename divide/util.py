@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 # Import 'ultralytics' package or install if missing
@@ -12,7 +11,8 @@ except (ImportError, AssertionError):
     os.system("pip install -U ultralytics")
     import ultralytics
 
-from conv_blocks import *
+from divide.conv_blocks import *
+
 
 def autopad(k, p=None, d=1):
     """
@@ -25,7 +25,6 @@ def autopad(k, p=None, d=1):
     if p is None:
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
     return p
-
 
 
 class Contract(nn.Module):
@@ -88,7 +87,6 @@ class Concat(nn.Module):
         return torch.cat(x, self.d)
 
 
-
 class Proto(nn.Module):
     """YOLOv5 mask Proto module for segmentation models, performing convolutions and upsampling on input tensors."""
 
@@ -126,4 +124,3 @@ class Classify(nn.Module):
         if isinstance(x, list):
             x = torch.cat(x, 1)
         return self.linear(self.drop(self.pool(self.conv(x)).flatten(1)))
-

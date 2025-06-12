@@ -1,6 +1,6 @@
-import torch
 import torch.nn as nn
-from conv_blocks import Conv
+from divide.conv_blocks import Conv
+
 
 class TransformerLayer(nn.Module):
     """Transformer layer with multihead attention and linear layers, optimized by removing LayerNorm."""
@@ -50,4 +50,3 @@ class TransformerBlock(nn.Module):
         b, _, w, h = x.shape
         p = x.flatten(2).permute(2, 0, 1)
         return self.tr(p + self.linear(p)).permute(1, 2, 0).reshape(b, self.c2, w, h)
-

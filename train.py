@@ -94,6 +94,7 @@ from utils.torch_utils import (
     smart_resume,
     torch_distributed_zero_first,
 )
+from divide.BIFPN import BiFPN_Feature2,BiFPN_Feature3
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv("RANK", -1))
@@ -251,6 +252,20 @@ def train(hyp, opt, device, callbacks):
     accumulate = max(round(nbs / batch_size), 1)  # accumulate loss before optimizing
     hyp["weight_decay"] *= batch_size * accumulate / nbs  # scale weight_decay
     optimizer = smart_optimizer(model, opt.optimizer, hyp["lr0"], hyp["momentum"], hyp["weight_decay"])
+
+    g0, g1, g2 = [], [], []  # optimizer parameter groups
+    for v in model.modules():
+        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
+            g2.append(v.bias)
+        if isinstance(v, nn.BatchNorm2d):  # weight (no decay)
+            g0.append(v.weight)
+        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+            g1.append(v.weight)
+        # BiFPN_Concat
+        elif isinstance(v, BiFPN_Feature2) and hasattr(v, 'w') and isinstance(v.w, nn.Parameter):
+            g1.append(v.w)
+        elif isinstance(v, BiFPN_Feature3) and hasattr(v, 'w') and isinstance(v.w, nn.Parameter):
+            g1.append(v.w)
 
     # Scheduler
     if opt.cos_lr:
@@ -994,5 +1009,14 @@ def run(**kwargs):
 
 
 if __name__ == "__main__":
+    import torch
+
+    print("是否支持 CUDA：", torch.cuda.is_available())
+    print("CUDA 版本：", torch.version.cuda)
+    print("GPU 数量：", torch.cuda.device_count())
+
+    if torch.cuda.is_available():
+        print("当前 GPU 名称：", torch.cuda.get_device_name(0))
+
     opt = parse_opt()
     main(opt)
