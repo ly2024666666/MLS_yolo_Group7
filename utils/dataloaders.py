@@ -958,62 +958,11 @@ class LoadImagesAndLabels(Dataset):
         """Returns the number of images in the dataset."""
         return len(self.im_files)
 
-    # def __iter__(self):
-    #     self.count = -1
-    #     print('ran dataset iter')
-    #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
-    #     return self
-
-    def detect_and_crop_face(self, img_cv2, expand_ratio=0.3):
-        h0, w0 = img_cv2.shape[:2]
-        img_pil = Image.fromarray(cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB))
-        box = self.mtcnn.detect(img_pil)[0]
-        if box is not None:
-            x1, y1, x2, y2 = map(int, box[0])
-
-            # 计算框的宽度和高度
-            bw = x2 - x1
-            bh = y2 - y1
-
-            # 扩大边界（向外扩 expand_ratio 的比例）
-            x1 = max(int(x1 - bw * expand_ratio), 0)
-            y1 = max(int(y1 - bh * expand_ratio), 0)
-            x2 = min(int(x2 + bw * expand_ratio), w0)
-            y2 = min(int(y2 + bh * expand_ratio), h0)
-
-            # 裁剪图像
-            img_crop = img_cv2[y1:y2, x1:x2]
-            h, w = img_crop.shape[:2]
-            return img_crop, (h0, w0), (h, w), (x1, y1, x2, y2)
-
-        # 没检测到人脸，返回原图
-        return img_cv2, (h0, w0), (h0, w0), (0, 0, w0, h0)
-
-    def adjust_labels_after_crop(self, labels, crop_box, orig_size, new_size):
-        x1, y1, x2, y2 = crop_box
-        ow, oh = orig_size[1], orig_size[0]
-        nw, nh = new_size[1], new_size[0]
-
-        adjusted = []
-        for label in labels:
-            cls, cx, cy, w, h = label
-            abs_x = cx * ow
-            abs_y = cy * oh
-            abs_w = w * ow
-            abs_h = h * oh
-
-            if not (x1 <= abs_x <= x2 and y1 <= abs_y <= y2):
-                continue
-
-            new_x = (abs_x - x1) / (x2 - x1)
-            new_y = (abs_y - y1) / (y2 - y1)
-            new_w = abs_w / (x2 - x1)
-            new_h = abs_h / (y2 - y1)
-
-            adjusted.append([cls, new_x, new_y, new_w, new_h])
-
-        return np.array(adjusted)
-
+    def __iter__(self):
+        self.count = -1
+        print('ran dataset iter')
+        #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
+        return self
 
     def __getitem__(self, index):
         """Fetches the dataset item at the given index, considering linear, shuffled, or weighted sampling."""
@@ -1032,10 +981,7 @@ class LoadImagesAndLabels(Dataset):
         else:
             # Load image
             img, (h0, w0), (h, w) = self.load_image(index)
-            # h_orig, w_orig = h, w
-            # if self.iscutface:
-            #     print("cuting face....")
-            #     img, (h0, w0), (h, w), crop_box =self.detect_and_crop_face(img)
+        
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -1043,8 +989,6 @@ class LoadImagesAndLabels(Dataset):
             shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
 
             labels = self.labels[index].copy()
-            # if self.iscutface:
-            #     labels = self.adjust_labels_after_crop(labels, crop_box, (h_orig, w_orig), (h, w))
 
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
