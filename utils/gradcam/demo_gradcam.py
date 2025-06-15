@@ -38,7 +38,7 @@ def run_gradcam_demo():
     # 运行GradCAM
     print("🔥 运行GradCAM...")
     cmd_gradcam = [
-        "python", "main_gradcam.py",
+        "python", "utils/gradcam/main_gradcam.py",
         "--model-path", model_path,
         "--img-path", img_path,
         "--output-dir", output_dir,
@@ -66,7 +66,7 @@ def run_gradcam_demo():
     # 运行GradCAM++
     print("🔥 运行GradCAM++...")
     cmd_gradcampp = [
-        "python", "main_gradcam.py",
+        "python", "utils/gradcam/main_gradcam.py",
         "--model-path", model_path,
         "--img-path", img_path,
         "--output-dir", output_dir,
@@ -102,16 +102,16 @@ def show_usage():
     print("=" * 50)
     print()
     print("1. 基本使用:")
-    print("   python main_gradcam.py --model-path yolov5s.pt --img-path data/images/bus.jpg")
+    print("   python utils/gradcam/main_gradcam.py --model-path vanilla.pt --img-path data/images/girl.jpg")
     print()
     print("2. 使用GradCAM++:")
-    print("   python main_gradcam.py --model-path yolov5s.pt --img-path data/images/bus.jpg --method gradcampp")
+    print("   python utils/gradcam/main_gradcam.py --model-path yolov5s.pt --img-path data/images/bus.jpg --method gradcampp")
     print()
     print("3. 批量处理:")
-    print("   python main_gradcam.py --model-path yolov5s.pt --img-path data/images/")
+    print("   python utils/gradcam/main_gradcam.py --model-path yolov5s.pt --img-path data/images/")
     print()
     print("4. 使用GPU:")
-    print("   python main_gradcam.py --model-path yolov5s.pt --img-path data/images/bus.jpg --device cuda")
+    print("   python utils/gradcam/main_gradcam.py --model-path yolov5s.pt --img-path data/images/bus.jpg --device cuda")
     print()
     print("5. 测试实现:")
     print("   python test_gradcam.py")
