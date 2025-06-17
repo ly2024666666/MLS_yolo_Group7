@@ -77,7 +77,6 @@ from divide.backend import DetectMultiBackend
 from divide.attention import CustomAttentionModule
 from divide.BIFPN import BiFPN_Feature2, BiFPN_Feature3
 
-# ✅ 伪造 `models.common` 模块
 fake_common = types.ModuleType("models.common")
 fake_common.Conv = Conv
 fake_common.C3 = C3
@@ -105,9 +104,7 @@ fake_common.CustomAttentionModule = CustomAttentionModule
 fake_common.BiFPN_Feature2 = BiFPN_Feature2
 fake_common.BiFPN_Feature3 = BiFPN_Feature3
 
-# ✅ 注册到 sys.modules
 sys.modules["models.common"] = fake_common
 
-# ✅ 然后使用标准 torch.load 加载
 ckpt = torch.load("yolov5n.pt", map_location="cpu")
-torch.save(ckpt, "new_yolo.pt")
+torch.save(ckpt, "yolov5n.pt")

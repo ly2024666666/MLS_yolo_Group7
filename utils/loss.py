@@ -249,21 +249,6 @@ class ComputeLoss:
                 pwh = (pwh.sigmoid() * 2) ** 2 * anchors[i]
                 pbox = torch.cat((pxy, pwh), 1)  # predicted box
                 
-                # 根据配置选择不同的IoU损失函数
-                # if self.iou_type == 'SIoU':
-                #     iou = bbox_iou(pbox, tbox[i], SIoU=True, alpha=1).squeeze()  # SIoU损失，alpha=1
-                # elif self.iou_type == 'alpha-SIoU':
-                #     iou = bbox_iou(pbox, tbox[i], SIoU=True, alpha=3).squeeze()  # alpha-SIoU损失，alpha=3
-                # elif self.iou_type == 'DIoU':
-                #     iou = bbox_iou(pbox, tbox[i], DIoU=True).squeeze()
-                # elif self.iou_type == 'CIoU':
-                #     iou = bbox_iou(pbox, tbox[i], CIoU=True).squeeze()
-                # elif self.iou_type == 'GIoU':
-                #     iou = bbox_iou(pbox, tbox[i], GIoU=True).squeeze()
-                # elif self.iou_type == 'EIoU':
-                #     iou = bbox_iou(pbox, tbox[i], EIoU=True).squeeze()
-                # else:  # IoU (default)
-                #     iou = bbox_iou(pbox, tbox[i]).squeeze()  # iou(prediction, target)
                 if self.iou_type == 'SIoU':
                     iou = bbox_iou(pbox, tbox[i], lossname=self.iou_type, alpha=1).squeeze()  # SIoU损失，alpha=1
                 elif self.iou_type == 'alpha-SIoU':

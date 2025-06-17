@@ -59,9 +59,9 @@ from utils.torch_utils import (
     torch_distributed_zero_first,
 )
 
-LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
-RANK = int(os.getenv("RANK", -1))
-WORLD_SIZE = int(os.getenv("WORLD_SIZE", 1))
+LOCAL_RANK = -1
+RANK = -1
+WORLD_SIZE = 1
 
 def train(hyp, opt, device, callbacks):
     print(f"RANK: {RANK}")
@@ -198,7 +198,7 @@ def train(hyp, opt, device, callbacks):
         hyp=hyp,
         augment=True,
         cache=None if opt.cache == "val" else opt.cache,
-        rect=opt.rect,
+        rect=False,
         rank=LOCAL_RANK,
         workers=workers,
         image_weights=False,
@@ -229,22 +229,19 @@ def train(hyp, opt, device, callbacks):
         iscutface=False,
     )[0]
 
-    if not opt.noautoanchor:
-        check_anchors(dataset, model=model, thr=hyp["anchor_t"], imgsz=imgsz)  # run AutoAnchor
+    check_anchors(dataset, model=model, thr=hyp["anchor_t"], imgsz=imgsz)  # run AutoAnchor
     model.half().float()  # pre-reduce anchor precision
 
     callbacks.run("on_pretrain_routine_end", labels, names)
 
 
     # Model attributes
-    # 非常重要！！！！
     nl = de_parallel(model).model[-1].nl  # number of detection layers (to scale hyps)
     # 关于框（bounding box）损失的超参数，用于控制框的损失对总损失的影响。
-    # 
     hyp["box"] *= 3 / nl  # scale to layers
     hyp["cls"] *= nc / 80 * 3 / nl  # scale to classes and layers
     hyp["obj"] *= (imgsz / 640) ** 2 * 3 / nl  # scale to image size and layers
-    hyp["label_smoothing"] = opt.label_smoothing
+    hyp["label_smoothing"] = 0.0
     model.nc = nc  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
@@ -261,7 +258,7 @@ def train(hyp, opt, device, callbacks):
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
-    stopper, stop = EarlyStopping(patience=opt.patience), False
+    stopper, stop = EarlyStopping(patience=100), False
     compute_loss = ComputeLoss(model,iou_type=opt.loss_function,Focal=opt.Focal)  # init loss class
     callbacks.run("on_train_start")
     LOGGER.info(
@@ -426,35 +423,22 @@ def parse_opt(known=False):
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/hyp.scratch-low.yaml", help="hyperparameters path")
     parser.add_argument("--epochs", type=int, default=5, help="total training epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="total batch size for all GPUs, -1 for autobatch")
-    parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
-    parser.add_argument("--rect", action="store_true", help="rectangular training")
     parser.add_argument("--nosave", action="store_true", help="only save final checkpoint")
     parser.add_argument("--noval", action="store_true", help="only validate final epoch")
-    parser.add_argument("--noautoanchor", action="store_true", help="disable AutoAnchor")
-    parser.add_argument("--noplots", action="store_true", help="save no plot files")
-    parser.add_argument("--bucket", type=str, default="", help="gsutil bucket")
-    parser.add_argument("--cache", type=str, nargs="?", const="ram", help="image --cache ram/disk")
-    parser.add_argument("--device", default="", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
     parser.add_argument("--single-cls", action="store_true", help="train multi-class data as single-class")
-    parser.add_argument("--optimizer", type=str, choices=["SGD", "Adam", "AdamW"], default="SGD", help="optimizer")
-    parser.add_argument("--sync-bn", action="store_true", help="use SyncBatchNorm, only available in DDP mode")
     parser.add_argument("--workers", type=int, default=8, help="max dataloader workers (per RANK in DDP mode)")
     parser.add_argument("--project", default=ROOT / "runs/train", help="save to project/name")
     parser.add_argument("--name", default="exp", help="save to project/name")
     parser.add_argument("--exist-ok", action="store_true", help="existing project/name ok, do not increment")
-    parser.add_argument("--cos-lr", action="store_true", help="cosine LR scheduler")
-    parser.add_argument("--label-smoothing", type=float, default=0.0, help="Label smoothing epsilon")
-    parser.add_argument("--patience", type=int, default=100, help="EarlyStopping patience (epochs without improvement)")
     parser.add_argument("--freeze", nargs="+", type=int, default=[0], help="Freeze layers: backbone=10, first3=0 1 2")
-    parser.add_argument("--save-period", type=int, default=-1, help="Save checkpoint every x epochs (disabled if < 1)")
+    parser.add_argument("--device", default="", help="cuda device, i.e. 0 or 0,1,2,3 or cpu")
+    parser.add_argument("--noplots", action="store_true", help="save no plot files")
     parser.add_argument("--seed", type=int, default=0, help="Global training seed")
-    parser.add_argument("--local_rank", type=int, default=-1, help="Automatic DDP Multi-GPU argument, do not modify")
-
-    # Logger arguments
-    parser.add_argument("--bbox_interval", type=int, default=-1, help="Set bounding-box image logging interval")
-    parser.add_argument("--artifact_alias", type=str, default="latest", help="Version of dataset artifact to use")
-
-
+    parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
+    parser.add_argument("--optimizer", type=str, choices=["SGD", "Adam", "AdamW"], default="SGD", help="optimizer")
+    parser.add_argument("--cache", type=str, nargs="?", const="ram", help="image --cache ram/disk")
+    parser.add_argument("--cos-lr", action="store_true", help="cosine LR scheduler")
+    parser.add_argument("--save-period", type=int, default=-1, help="Save checkpoint every x epochs (disabled if < 1)")
     # add loss
     parser.add_argument("--loss_function", type=str, default="loss", help="Set loss function")
     parser.add_argument("--Focal", action="store_true", help="Loss Focal")
