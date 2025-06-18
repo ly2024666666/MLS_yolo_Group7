@@ -7,7 +7,7 @@
 - run文件夹：存放运行结果
 - utils文件夹：模型工具像
 # 训练指令
-## 原始yolo
+## GSConv
 python train.py --data smoke.yaml --epochs 20 --weights "yolov5n.pt" --cfg yolov5n.yaml --batch-size 4 --device cpu
 
 ## BIFPN
