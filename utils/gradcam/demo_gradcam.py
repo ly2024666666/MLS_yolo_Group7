@@ -1,51 +1,57 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 GradCAM演示脚本
-使用data/images/bus.jpg作为示例图片
+使用data/images/bus.jpg作为示例图片.
 """
 
 import os
-import sys
 import subprocess
+import sys
+
 
 def run_gradcam_demo():
-    """运行GradCAM演示"""
+    """运行GradCAM演示."""
     print("🚀 开始运行YOLOv5 GradCAM演示...")
     print("=" * 50)
-    
+
     # 检查必要文件
     model_path = "yolov5s.pt"
     img_path = "data/images/bus.jpg"
-    
+
     if not os.path.exists(model_path):
         print(f"❌ 错误: 找不到模型文件 {model_path}")
         print("请确保yolov5s.pt文件存在于当前目录中")
         return False
-    
+
     if not os.path.exists(img_path):
         print(f"❌ 错误: 找不到测试图片 {img_path}")
         return False
-    
+
     print(f"✅ 模型文件: {model_path}")
     print(f"✅ 测试图片: {img_path}")
     print()
-    
+
     # 创建输出目录
     output_dir = "outputs/"
     os.makedirs(output_dir, exist_ok=True)
-    
+
     # 运行GradCAM
     print("🔥 运行GradCAM...")
     cmd_gradcam = [
-        "python", "main_gradcam.py",
-        "--model-path", model_path,
-        "--img-path", img_path,
-        "--output-dir", output_dir,
-        "--method", "gradcam",
-        "--device", "cpu"
+        "python",
+        "main_gradcam.py",
+        "--model-path",
+        model_path,
+        "--img-path",
+        img_path,
+        "--output-dir",
+        output_dir,
+        "--method",
+        "gradcam",
+        "--device",
+        "cpu",
     ]
-    
+
     try:
         result = subprocess.run(cmd_gradcam, capture_output=True, text=True, timeout=300)
         if result.returncode == 0:
@@ -60,20 +66,26 @@ def run_gradcam_demo():
     except Exception as e:
         print(f"❌ 运行GradCAM时出错: {e}")
         return False
-    
+
     print()
-    
+
     # 运行GradCAM++
     print("🔥 运行GradCAM++...")
     cmd_gradcampp = [
-        "python", "main_gradcam.py",
-        "--model-path", model_path,
-        "--img-path", img_path,
-        "--output-dir", output_dir,
-        "--method", "gradcampp",
-        "--device", "cpu"
+        "python",
+        "main_gradcam.py",
+        "--model-path",
+        model_path,
+        "--img-path",
+        img_path,
+        "--output-dir",
+        output_dir,
+        "--method",
+        "gradcampp",
+        "--device",
+        "cpu",
     ]
-    
+
     try:
         result = subprocess.run(cmd_gradcampp, capture_output=True, text=True, timeout=300)
         if result.returncode == 0:
@@ -88,16 +100,17 @@ def run_gradcam_demo():
     except Exception as e:
         print(f"❌ 运行GradCAM++时出错: {e}")
         return False
-    
+
     print()
     print("🎉 演示完成!")
     print(f"📁 结果保存在: {output_dir}")
     print("📸 查看生成的热力图可视化结果")
-    
+
     return True
 
+
 def show_usage():
-    """显示使用说明"""
+    """显示使用说明."""
     print("📖 YOLOv5 GradCAM 使用说明")
     print("=" * 50)
     print()
@@ -116,6 +129,7 @@ def show_usage():
     print("5. 测试实现:")
     print("   python test_gradcam.py")
     print()
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
@@ -136,4 +150,4 @@ if __name__ == "__main__":
             print("请检查错误信息并确保:")
             print("1. yolov5s.pt模型文件存在")
             print("2. 所有依赖包已安装")
-            print("3. Python环境配置正确") 
+            print("3. Python环境配置正确")

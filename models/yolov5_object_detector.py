@@ -1,26 +1,29 @@
+import time
+
 import numpy as np
 import torch
-from models.experimental import attempt_load
-from utils.general import xywh2xyxy
-from utils.augmentations import letterbox
-import cv2
-import time
-import torchvision
 import torch.nn as nn
+import torchvision
+
+from models.experimental import attempt_load
+from utils.augmentations import letterbox
+from utils.general import xywh2xyxy
 from utils.metrics import box_iou
 
 
 class YOLOV5TorchObjectDetector(nn.Module):
-    def __init__(self,
-                 model_weight,
-                 device,
-                 img_size,
-                 names=None,
-                 mode='eval',
-                 confidence=0.45,
-                 iou_thresh=0.45,
-                 agnostic_nms=False):
-        super(YOLOV5TorchObjectDetector, self).__init__()
+    def __init__(
+        self,
+        model_weight,
+        device,
+        img_size,
+        names=None,
+        mode="eval",
+        confidence=0.45,
+        iou_thresh=0.45,
+        agnostic_nms=False,
+    ):
+        super().__init__()
         self.device = device
         self.model = None
         self.img_size = img_size
@@ -32,13 +35,13 @@ class YOLOV5TorchObjectDetector(nn.Module):
         self.model.requires_grad_(True)
         self.model.to(device)
 
-        if self.mode == 'train':
+        if self.mode == "train":
             self.model.train()
         else:
             self.model.eval()
         # fetch the names
         if names is None:
-            self.names = ['your dataset classname']
+            self.names = ["your dataset classname"]
         else:
             self.names = names
 
@@ -47,23 +50,31 @@ class YOLOV5TorchObjectDetector(nn.Module):
         self.model(img)
 
     @staticmethod
-    def non_max_suppression(prediction, logits, conf_thres=0.3, iou_thres=0.45, classes=None, agnostic=False,
-                            multi_label=False, labels=(), max_det=300):
-        """Runs Non-Maximum Suppression (NMS) on inference and logits results
+    def non_max_suppression(
+        prediction,
+        logits,
+        conf_thres=0.3,
+        iou_thres=0.45,
+        classes=None,
+        agnostic=False,
+        multi_label=False,
+        labels=(),
+        max_det=300,
+    ):
+        """Runs Non-Maximum Suppression (NMS) on inference and logits results.
 
         Returns:
              list of detections, on (n,6) tensor per image [xyxy, conf, cls] and pruned input logits (n, number-classes)
         """
-
         nc = prediction.shape[2] - 5  # number of classes
         xc = prediction[..., 4] > conf_thres  # candidates
 
         # Checks
-        assert 0 <= conf_thres <= 1, f'Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0'
-        assert 0 <= iou_thres <= 1, f'Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0'
+        assert 0 <= conf_thres <= 1, f"Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0"
+        assert 0 <= iou_thres <= 1, f"Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0"
 
         # Settings
-        min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
+        _min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
         max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
         time_limit = 10.0  # seconds to quit after
         redundant = True  # require redundant detections
@@ -122,7 +133,7 @@ class YOLOV5TorchObjectDetector(nn.Module):
             i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
             if i.shape[0] > max_det:  # limit detections
                 i = i[:max_det]
-            if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
+            if merge and (1 < n < 3e3):  # Merge NMS (boxes merged using weighted mean)
                 # update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
                 iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
                 weights = iou * scores[None]  # box weights
@@ -134,23 +145,23 @@ class YOLOV5TorchObjectDetector(nn.Module):
             logits_output[xi] = log_[i]
             assert log_[i].shape[0] == x[i].shape[0]
             if (time.time() - t) > time_limit:
-                print(f'WARNING: NMS time limit {time_limit}s exceeded')
+                print(f"WARNING: NMS time limit {time_limit}s exceeded")
                 break  # time limit exceeded
 
         return output, logits_output
 
     @staticmethod
     def yolo_resize(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
-
         return letterbox(img, new_shape=new_shape, color=color, auto=auto, scaleFill=scaleFill, scaleup=scaleup)
 
     def forward(self, img):
         prediction, logits, _ = self.model(img, augment=False)
-        prediction, logits = self.non_max_suppression(prediction, logits, self.confidence, self.iou_thresh,
-                                                      classes=None,
-                                                      agnostic=self.agnostic)
-        self.boxes, self.class_names, self.classes, self.confidences = [[[] for _ in range(img.shape[0])] for _ in
-                                                                        range(4)]
+        prediction, logits = self.non_max_suppression(
+            prediction, logits, self.confidence, self.iou_thresh, classes=None, agnostic=self.agnostic
+        )
+        self.boxes, self.class_names, self.classes, self.confidences = [
+            [[] for _ in range(img.shape[0])] for _ in range(4)
+        ]
         for i, det in enumerate(prediction):  # detections per image
             if len(det):
                 for *xyxy, conf, cls in det:
@@ -175,4 +186,4 @@ class YOLOV5TorchObjectDetector(nn.Module):
         img = np.ascontiguousarray(img)
         img = torch.from_numpy(img).to(self.device)
         img = img / 255.0
-        return img 
+        return img
