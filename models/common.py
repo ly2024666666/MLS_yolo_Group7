@@ -1,5 +1,4 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-
 """Common modules."""
 
 import ast
@@ -75,7 +74,7 @@ def autopad(k, p=None, d=1):
 # 两个特征图add操作
 class BiFPN_Add2(nn.Module):
     def __init__(self, c1, c2):
-        super(BiFPN_Add2, self).__init__()
+        super().__init__()
         # 设置可学习参数 nn.Parameter的作用是：将一个不可训练的类型Tensor转换成可以训练的类型parameter
         # 并且会向宿主模型注册该参数 成为其一部分 即model.parameters()会包含这个parameter
         # 从而在参数优化的时候可以自动一起优化
@@ -93,7 +92,7 @@ class BiFPN_Add2(nn.Module):
 # 三个特征图add操作
 class BiFPN_Add3(nn.Module):
     def __init__(self, c1, c2):
-        super(BiFPN_Add3, self).__init__()
+        super().__init__()
         self.w = nn.Parameter(torch.ones(3, dtype=torch.float32), requires_grad=True)
         self.epsilon = 0.0001
         self.conv = nn.Conv2d(c1, c2, kernel_size=1, stride=1, padding=0)
@@ -104,7 +103,6 @@ class BiFPN_Add3(nn.Module):
         weight = w / (torch.sum(w, dim=0) + self.epsilon)
         # Fast normalized fusion
         return self.conv(self.silu(weight[0] * x[0] + weight[1] * x[1] + weight[2] * x[2]))
-
 
 
 class CustomAttentionModule(nn.Module):
