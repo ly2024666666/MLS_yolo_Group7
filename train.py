@@ -1,5 +1,4 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
-
 """
 Train a YOLOv5 model on a custom dataset. Models and datasets download automatically from the latest YOLOv5 release.
 
@@ -46,6 +45,7 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 import val as validate  # for end-of-epoch mAP
+from models.common import BiFPN_Add2, BiFPN_Add3
 from models.experimental import attempt_load
 from models.yolo import Model
 from utils.autoanchor import check_anchors
@@ -94,9 +94,6 @@ from utils.torch_utils import (
     smart_resume,
     torch_distributed_zero_first,
 )
-from models.common import BiFPN_Add2
-from models.common import BiFPN_Add3
-
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv("RANK", -1))
@@ -253,16 +250,16 @@ def train(hyp, opt, device, callbacks):
 
     g0, g1, g2 = [], [], []  # optimizer parameter groups
     for v in model.modules():
-        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
+        if hasattr(v, "bias") and isinstance(v.bias, nn.Parameter):  # bias
             g2.append(v.bias)
         if isinstance(v, nn.BatchNorm2d):  # weight (no decay)
             g0.append(v.weight)
-        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
+        elif hasattr(v, "weight") and isinstance(v.weight, nn.Parameter):  # weight (with decay)
             g1.append(v.weight)
         # BiFPN_Concat
-        elif isinstance(v, BiFPN_Add2) and hasattr(v, 'w') and isinstance(v.w, nn.Parameter):
+        elif isinstance(v, BiFPN_Add2) and hasattr(v, "w") and isinstance(v.w, nn.Parameter):
             g1.append(v.w)
-        elif isinstance(v, BiFPN_Add3) and hasattr(v, 'w') and isinstance(v.w, nn.Parameter):
+        elif isinstance(v, BiFPN_Add3) and hasattr(v, "w") and isinstance(v.w, nn.Parameter):
             g1.append(v.w)
 
     # Scheduler
@@ -372,7 +369,7 @@ def train(hyp, opt, device, callbacks):
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     stopper, stop = EarlyStopping(patience=opt.patience), False
-    compute_loss = ComputeLoss(model, iou_type='DIOU')  # init loss class
+    compute_loss = ComputeLoss(model, iou_type="DIOU")  # init loss class
     callbacks.run("on_train_start")
     LOGGER.info(
         f"Image sizes {imgsz} train, {imgsz} val\n"
